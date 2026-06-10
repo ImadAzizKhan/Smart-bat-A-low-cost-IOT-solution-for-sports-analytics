@@ -1,0 +1,19 @@
+=====================================================================
+OMNISTRIKE HARDWARE PINOUT DEFINITION (ESP32-S3 Dev Module)
+=====================================================================
+
+1. BNO085 IMU SENSOR CONECTIONS (I2C Architecture)
+---------------------------------------------------------------------
+ESP32-S3 Pin      | BNO085 Sensor Pin | Purpose
+---------------------------------------------------------------------
+3.3V              | VCC               | Power Supply
+GND               | GND               | Ground Reference
+GPIO 21           | SDA               | I2C Serial Data Line
+GPIO 22           | SCL               | I2C Serial Clock Line
+
+2. HAPTIC FEEDBACK MOTOR
+---------------------------------------------------------------------
+ESP32-S3 Pin      | Motor Controller  | Purpose
+---------------------------------------------------------------------
+GPIO 15           | PWM / IN (+)      | Haptic Signal Logic (High/Low)
+GND               | (-)               | Common Ground Reference
