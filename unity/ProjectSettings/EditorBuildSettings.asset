@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1045 &1
+EditorBuildSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Scenes:
+  - enabled: 0
+    path: Assets/Scenes/SampleScene.unity
+    guid: 8c9cfa26abfee488c85f1582747f6a02
+  - enabled: 1
+    path: Assets/MainMenu.unity
+    guid: 8d6a2c1236c01df40bd1336051a199d7
+  - enabled: 1
+    path: Assets/ArenaMatch.unity
+    guid: 085c019d5e832a34992206b5c474d594
+  - enabled: 1
+    path: Assets/TrainingNets.unity
+    guid: 3f60630877f3af5459f1ba0dfe5a35b6
+  m_configObjects:
+    com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
+    com.unity.xr.management.loader_settings: {fileID: 11400000, guid: f25831a68a44815428c2dc69167cfb20, type: 2}
+    com.unity.xr.openxr.settings4: {fileID: 11400000, guid: e4b09bcfc12bf8e4abf82dfcef379c65, type: 2}
+  m_UseUCBPForAssetBundles: 0
