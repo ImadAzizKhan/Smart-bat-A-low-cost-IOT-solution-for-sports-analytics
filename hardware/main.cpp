@@ -2,13 +2,12 @@
 #include <Adafruit_BNO08x.h>
 #include <WiFi.h>
 #include <WiFiUdp.h>
+#include <WiFiManager.h>
 
 // --- Network Settings ---
-// const char* ssid = "iliadbox-2A7CAF";
-// const char* password = "933x3qbv6tqtctnsq5shsr";
-const char* ssid = "Your Wifi SSID"; // Replace with your Wi-Fi SSID
-const char* password = "Your Wifi Password"; // Replace with your Wi-Fi password
-const char* targetIP = "IP OF THE UNITY MACHINE"; // IP of the Unity machine on the local network
+
+// We will calculate the broadcast IP dynamically based on the network
+IPAddress broadcastIP;
 const int targetPort = 5005; //Unity port
 const int PYTHON_IMU_PORT = 5004; // New port for the Python script
 const int MOTOR_PIN = 15; 
@@ -32,20 +31,62 @@ unsigned long lastWiFiCheck = 0;
 
 void setup() {
   Serial.begin(115200);
-  delay(3000); 
+  while (!Serial) delay(10);
+
+
 
   pinMode(MOTOR_PIN, OUTPUT);
   digitalWrite(MOTOR_PIN, LOW);
 
-  // Connect to Wi-Fi
-  WiFi.mode(WIFI_STA);
-  WiFi.setSleep(false);
-  WiFi.begin(ssid, password);
-  Serial.print("Connecting to Wi-Fi");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+  // --- 1. MAGIC PLUG-AND-PLAY WIFI ---
+  WiFiManager wifiManager;
+  
+  // Uncomment the line below ONCE if you ever need to wipe the bat's memory to test the portal
+  // wifiManager.resetSettings(); 
+
+  Serial.println("Starting SwingLab Network Manager...");
+  
+  // This is the magic. It tries to connect to the last saved WiFi.
+  // If it fails (or is in a new location), it turns the bat into a hotspot named "AuraCoach_Setup"
+  if (!wifiManager.autoConnect("SwingLab_Setup")) {
+    Serial.println("Failed to connect and hit timeout. Restarting...");
+    delay(3000);
+    ESP.restart();
   }
+
+  // --- 2. CALCULATE UDP BROADCAST ---
+  // We made it here, which means we are connected to the router/laptop hotspot!
+  Serial.println("\nWiFi Connected!");
+  Serial.print("Bat IP: ");
+  Serial.println(WiFi.localIP());
+
+  // // Connect to Wi-Fi
+  // WiFi.mode(WIFI_STA);
+  // WiFi.setSleep(false);
+  // WiFi.begin(ssid, password);
+
+
+  // new
+  // while (WiFi.status() != WL_CONNECTED) {
+  //   delay(500);
+  //   Serial.print(".");
+  // }
+  
+  // Calculate the broadcast IP for whatever network we joined!
+  broadcastIP = WiFi.localIP();
+  broadcastIP[3] = 255; // e.g., turns 192.168.1.45 into 192.168.1.255
+  
+  Serial.println("\nConnected!");
+  Serial.print("Broadcasting to: ");
+  Serial.println(broadcastIP);
+  // End new
+
+  
+  // Serial.print("Connecting to Wi-Fi");
+  // while (WiFi.status() != WL_CONNECTED) {
+  //   delay(500);
+  //   Serial.print(".");
+  // }
   Serial.println("\nWi-Fi Connected!");
   udp.begin(LISTEN_PORT); 
 
@@ -67,18 +108,22 @@ void loop() {
   // 1. NON-BLOCKING WIFI RECOVERY
   if (WiFi.status() != WL_CONNECTED) {
     if (millis() - lastWiFiCheck > 5000) { // Check every 5 seconds
-      Serial.println("WiFi lost! Attempting to reconnect...");
-      WiFi.disconnect();
-      WiFi.begin(ssid, password);
+      Serial.println("WiFi lost! ESP32 will auto-reconnect...");
+      
+      // If you want to force the setup portal to open again when WiFi is lost:
+      // WiFiManager wm;
+      // wm.setConfigPortalTimeout(120); // Open portal for 2 mins, then resume loop
+      // wm.startConfigPortal("AuraCoach_Setup"); 
+      
       lastWiFiCheck = millis();
     }
   }
 
   // 2. SENSOR READING & UDP BROADCAST
   if (bno08x.wasReset()) {
-    bno08x.enableReport(SH2_GAME_ROTATION_VECTOR);
-    bno08x.enableReport(SH2_LINEAR_ACCELERATION);
-    bno08x.enableReport(SH2_GYROSCOPE_CALIBRATED);
+    bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 10000); 
+    bno08x.enableReport(SH2_LINEAR_ACCELERATION, 10000);
+    bno08x.enableReport(SH2_GYROSCOPE_CALIBRATED, 10000);
   }
 
   sh2_SensorValue_t sensorValue;
@@ -105,27 +150,27 @@ void loop() {
     }
   }
     // 3. THE FIX: CONTINUOUS UDP BROADCAST (100Hz)
-  // This guarantees Python gets its 20 calibration frames instantly, even if the bat is dead still
-  if (millis() - lastUdpTime >= 10) {
-      lastUdpTime = millis();
-      
-      char dataString[128];
-      snprintf(dataString, sizeof(dataString), 
-               "%.4f,%.4f,%.4f,%.4f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f", 
-               qX, qY, qZ, qW, aX, aY, aZ, gX, gY, gZ);
-                          
-      // Fire to Unity (Rotation)
-      udp.beginPacket(targetIP, targetPort);
-      udp.print(dataString);
-      udp.endPacket();
 
-      // Fire to Python (IMU Position Math)
-      udp.beginPacket(targetIP, PYTHON_IMU_PORT);
-      udp.print(dataString);
-      udp.endPacket();
-      
-      // Optional: Uncomment for debugging, but it will flood your monitor fast!
-      // Serial.println(dataString); 
+
+  if (WiFi.status() == WL_CONNECTED) {
+    if (millis() - lastUdpTime >= 10) {
+        lastUdpTime = millis();
+        
+        char dataString[128];
+        snprintf(dataString, sizeof(dataString), 
+                 "%.4f,%.4f,%.4f,%.4f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f", 
+                 qX, qY, qZ, qW, aX, aY, aZ, gX, gY, gZ);
+                            
+        // Fire to Unity (Rotation)
+        udp.beginPacket(broadcastIP, targetPort);
+        udp.print(dataString);
+        udp.endPacket();
+
+        // Fire to Python (IMU Position Math)
+        udp.beginPacket(broadcastIP, PYTHON_IMU_PORT);
+        udp.print(dataString);
+        udp.endPacket();
+    }
   }
 
   // 3. NON-BLOCKING UDP RECEIVE FOR HAPTICS
